@@ -12,13 +12,20 @@ class PDFProcessor:
     @staticmethod
     def split_pdf(pdf_bytes, mode="single"):
         try:
+            if not pdf_bytes:
+                return False, "輸入的 PDF 數據為空"
+
             temp_dir = tempfile.mkdtemp()
             split_files = []
             
-            # Write the uploaded PDF to a temp file
+            # 將上傳的 PDF 寫入臨時文件
             temp_pdf_path = os.path.join(temp_dir, "temp.pdf")
             with open(temp_pdf_path, "wb") as f:
                 f.write(pdf_bytes)
+            
+            # 驗證臨時檔案是否正確寫入
+            if not os.path.exists(temp_pdf_path) or os.path.getsize(temp_pdf_path) == 0:
+                return False, "臨時 PDF 檔案無效或為空"
             
             doc = fitz.open(temp_pdf_path)
             if mode == "single":
@@ -47,16 +54,21 @@ class PDFProcessor:
                     split_files.append(output_path)
             doc.close()
             
-            # Create a zip file of all PDFs
+            # 創建壓縮包
             zip_path = os.path.join(temp_dir, "split_pdfs.zip")
-            with zipfile.ZipFile(zip_path, 'w') as zipf:
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as zipf:
                 for file in split_files:
-                    zipf.write(file, os.path.basename(file))
+                    if os.path.exists(file) and os.path.getsize(file) > 0:
+                        zipf.write(file, os.path.basename(file))
             
-            # Read the zip file
+            # 驗證壓縮包
+            if not os.path.exists(zip_path) or os.path.getsize(zip_path) == 0:
+                return False, "壓縮包未創建或為空"
+            
+            # 讀取壓縮包
             with open(zip_path, "rb") as f:
                 zip_data = f.read()
-                
+            
             return True, zip_data
         except Exception as e:
             return False, str(e)
@@ -64,11 +76,17 @@ class PDFProcessor:
     @staticmethod
     def extract_pages(pdf_bytes, pages_input):
         try:
-            # Write the uploaded PDF to a temp file
+            if not pdf_bytes:
+                return False, "輸入的 PDF 數據為空"
+
             temp_dir = tempfile.mkdtemp()
             temp_pdf_path = os.path.join(temp_dir, "temp.pdf")
             with open(temp_pdf_path, "wb") as f:
                 f.write(pdf_bytes)
+            
+            # 驗證臨時檔案
+            if not os.path.exists(temp_pdf_path) or os.path.getsize(temp_pdf_path) == 0:
+                return False, "臨時 PDF 檔案無效或為空"
                 
             doc = fitz.open(temp_pdf_path)
             new_pdf = fitz.open()
@@ -88,7 +106,6 @@ class PDFProcessor:
             new_pdf.close()
             doc.close()
             
-            # Read the output PDF
             with open(output_path, "rb") as f:
                 output_pdf_bytes = f.read()
                 
@@ -104,6 +121,8 @@ class PDFProcessor:
             
             for pdf_file in pdf_files:
                 pdf_bytes = pdf_file.read()
+                if not pdf_bytes:
+                    continue
                 temp_path = os.path.join(temp_dir, pdf_file.name)
                 with open(temp_path, "wb") as f:
                     f.write(pdf_bytes)
@@ -115,7 +134,6 @@ class PDFProcessor:
             result_pdf.save(output_path)
             result_pdf.close()
             
-            # Read the output PDF
             with open(output_path, "rb") as f:
                 output_pdf_bytes = f.read()
                 
@@ -126,17 +144,22 @@ class PDFProcessor:
     @staticmethod
     def extract_images(pdf_bytes, selected_indices, image_format="png"):
         try:
-            # Write the uploaded PDF to a temp file
+            if not pdf_bytes:
+                return False, [], "輸入的 PDF 數據為空"
+
             temp_dir = tempfile.mkdtemp()
             temp_pdf_path = os.path.join(temp_dir, "temp.pdf")
             with open(temp_pdf_path, "wb") as f:
                 f.write(pdf_bytes)
-                
+            
+            # 驗證臨時檔案
+            if not os.path.exists(temp_pdf_path) or os.path.getsize(temp_pdf_path) == 0:
+                return False, [], "臨時 PDF 檔案無效或為空"
+            
             doc = fitz.open(temp_pdf_path)
-            images = []
             all_images = []
             
-            # Extract all images
+            # 提取所有圖片
             for page_index in range(len(doc)):
                 for img_index, img in enumerate(doc[page_index].get_images(full=True)):
                     xref = img[0]
@@ -144,10 +167,12 @@ class PDFProcessor:
                     image_bytes = base_image["image"]
                     all_images.append(image_bytes)
             
-            # Create a zip file with selected images
+            doc.close()
+            
+            # 創建壓縮包
             if selected_indices:
                 zip_path = os.path.join(temp_dir, "extracted_images.zip")
-                with zipfile.ZipFile(zip_path, 'w') as zipf:
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as zipf:
                     for idx in selected_indices:
                         if idx < len(all_images):
                             img_bytes = all_images[idx]
@@ -155,12 +180,17 @@ class PDFProcessor:
                             img_path = os.path.join(temp_dir, f"image_{idx+1}.{image_format.lower()}")
                             save_format = "JPEG" if image_format.lower() == "jpg" else image_format.upper()
                             img.save(img_path, format=save_format)
-                            zipf.write(img_path, os.path.basename(img_path))
+                            if os.path.exists(img_path) and os.path.getsize(img_path) > 0:
+                                zipf.write(img_path, os.path.basename(img_path))
                 
-                # Read the zip file
+                # 驗證壓縮包
+                if not os.path.exists(zip_path) or os.path.getsize(zip_path) == 0:
+                    return False, all_images, "壓縮包未創建或為空"
+                
+                # 讀取壓縮包
                 with open(zip_path, "rb") as f:
                     zip_data = f.read()
-                    
+                
                 return True, all_images, zip_data
             
             return True, all_images, None
@@ -170,11 +200,17 @@ class PDFProcessor:
     @staticmethod
     def convert_pdf_to_txt(pdf_bytes, display_page_numbers):
         try:
-            # Write the uploaded PDF to a temp file
+            if not pdf_bytes:
+                return False, "輸入的 PDF 數據為空"
+
             temp_dir = tempfile.mkdtemp()
             temp_pdf_path = os.path.join(temp_dir, "temp.pdf")
             with open(temp_pdf_path, "wb") as f:
                 f.write(pdf_bytes)
+            
+            # 驗證臨時檔案
+            if not os.path.exists(temp_pdf_path) or os.path.getsize(temp_pdf_path) == 0:
+                return False, "臨時 PDF 檔案無效或為空"
             
             text_content = ""
             with pdfplumber.open(temp_pdf_path) as pdf:
@@ -209,7 +245,6 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Custom CSS to improve UI
     st.markdown("""
     <style>
     .stApp {
@@ -268,16 +303,17 @@ def main():
         st.image("https://www.svgrepo.com/show/374049/pdf.svg", width=100)
         choice = st.selectbox("選擇功能", activities)
         st.markdown("---")
-        st.markdown("<p class='info-text'>版本 Ver: 1.0s 2025<br>作者：葉春華</p>", unsafe_allow_html=True)
+        st.markdown("<p class='info-text'>Stream 版本 Ver: 1.1s 2025<br>作者：葉春華</p>", unsafe_allow_html=True)
     
     if choice == "PDF轉文字":
         st.markdown("<h2 class='sub-header'>PDF轉換為文字</h2>", unsafe_allow_html=True)
         display_page_numbers = st.checkbox("顯示頁碼", value=False)
-        uploaded_file = st.file_uploader("上傳PDF檔案", type=['pdf'])
+        uploaded_file = st.file_uploader("上傳PDF檔案", type=['pdf'], key="txt_uploader")
         
         if uploaded_file is not None:
+            pdf_bytes = uploaded_file.read()
             with st.spinner("正在處理中..."):
-                success, result = PDFProcessor.convert_pdf_to_txt(uploaded_file.read(), display_page_numbers)
+                success, result = PDFProcessor.convert_pdf_to_txt(pdf_bytes, display_page_numbers)
                 
                 if success:
                     st.markdown("<div class='success-message'>PDF成功轉換為文字!</div>", unsafe_allow_html=True)
@@ -293,23 +329,22 @@ def main():
                     st.markdown(f"<div class='error-message'>轉換失敗: {result}</div>", unsafe_allow_html=True)
     
     elif choice == "提取PDF圖片":
-        st.markdown("<h2 class='sub-header'>提取PDF圖片</h2>", unsafe_allow_html=True)
-        uploaded_file = st.file_uploader("上傳PDF檔案", type=['pdf'])
+        st.markdown("<h2 class='sub-header'>PDF轉換為文字</h2>", unsafe_allow_html=True)
+        uploaded_file = st.file_uploader("上傳PDF檔案", type=['pdf'], key="img_uploader")
         
         if uploaded_file is not None:
+            pdf_bytes = uploaded_file.read()
             image_format = st.radio("選擇圖片格式", ["PNG", "JPG"])
             
             with st.spinner("正在提取圖片..."):
-                success, images, _ = PDFProcessor.extract_images(uploaded_file.read(), [], image_format.lower())
+                success, images, _ = PDFProcessor.extract_images(pdf_bytes, [], image_format.lower())
                 
                 if success and images:
                     st.markdown("<div class='success-message'>成功提取圖片!</div>", unsafe_allow_html=True)
                     
-                    # Display images with checkboxes
                     st.write(f"找到 {len(images)} 張圖片")
                     selected_images = []
                     
-                    # Use columns to display images in a grid
                     cols = st.columns(3)
                     for i, img_bytes in enumerate(images):
                         col_idx = i % 3
@@ -326,17 +361,20 @@ def main():
                     if st.button("下載選中的圖片"):
                         if selected_images:
                             with st.spinner("正在準備下載..."):
-                                _, _, zip_data = PDFProcessor.extract_images(
-                                    uploaded_file.read(), 
+                                success, _, zip_data = PDFProcessor.extract_images(
+                                    pdf_bytes, 
                                     selected_images, 
                                     image_format.lower()
                                 )
-                                st.download_button(
-                                    label="下載圖片壓縮包",
-                                    data=zip_data,
-                                    file_name="extracted_images.zip",
-                                    mime="application/zip"
-                                )
+                                if success:
+                                    st.download_button(
+                                        label="下載圖片壓縮包",
+                                        data=zip_data,
+                                        file_name="extracted_images.zip",
+                                        mime="application/zip"
+                                    )
+                                else:
+                                    st.markdown("<div class='error-message'>生成壓縮包失敗</div>", unsafe_allow_html=True)
                         else:
                             st.warning("請至少選擇一張圖片")
                 elif success and not images:
@@ -346,9 +384,10 @@ def main():
     
     elif choice == "分割PDF":
         st.markdown("<h2 class='sub-header'>分割PDF</h2>", unsafe_allow_html=True)
-        uploaded_file = st.file_uploader("上傳PDF檔案", type=['pdf'])
+        uploaded_file = st.file_uploader("上傳PDF檔案", type=['pdf'], key="split_uploader")
         
         if uploaded_file is not None:
+            pdf_bytes = uploaded_file.read()
             mode = st.radio("選擇分割模式", ["分割成單頁", "擷取單數頁", "擷取偶數頁"], 
                             format_func=lambda x: {"分割成單頁": "分割成單頁", "擷取單數頁": "擷取單數頁", "擷取偶數頁": "擷取偶數頁"}[x])
             
@@ -360,7 +399,7 @@ def main():
             
             if st.button("分割PDF"):
                 with st.spinner("正在處理中..."):
-                    success, result = PDFProcessor.split_pdf(uploaded_file.read(), mode_map[mode])
+                    success, result = PDFProcessor.split_pdf(pdf_bytes, mode_map[mode])
                     
                     if success:
                         st.markdown("<div class='success-message'>PDF成功分割!</div>", unsafe_allow_html=True)
@@ -375,15 +414,16 @@ def main():
     
     elif choice == "擷取特定頁面":
         st.markdown("<h2 class='sub-header'>擷取特定頁面</h2>", unsafe_allow_html=True)
-        uploaded_file = st.file_uploader("上傳PDF檔案", type=['pdf'])
+        uploaded_file = st.file_uploader("上傳PDF檔案", type=['pdf'], key="extract_uploader")
         
         if uploaded_file is not None:
+            pdf_bytes = uploaded_file.read()
             pages_input = st.text_input("輸入頁面範圍 (例如: 1-3,5,7-9)")
             
             if st.button("擷取頁面"):
                 if pages_input:
                     with st.spinner("正在處理中..."):
-                        success, result = PDFProcessor.extract_pages(uploaded_file.read(), pages_input)
+                        success, result = PDFProcessor.extract_pages(pdf_bytes, pages_input)
                         
                         if success:
                             st.markdown("<div class='success-message'>成功擷取指定頁面!</div>", unsafe_allow_html=True)
@@ -400,7 +440,7 @@ def main():
     
     elif choice == "合併多個PDF":
         st.markdown("<h2 class='sub-header'>合併多個PDF</h2>", unsafe_allow_html=True)
-        uploaded_files = st.file_uploader("上傳多個PDF檔案", type=['pdf'], accept_multiple_files=True)
+        uploaded_files = st.file_uploader("上傳多個PDF檔案", type=['pdf'], accept_multiple_files=True, key="merge_uploader")
         
         if uploaded_files:
             st.write(f"已上傳 {len(uploaded_files)} 個PDF檔案")
