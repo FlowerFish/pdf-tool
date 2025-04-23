@@ -265,7 +265,7 @@ def main():
     ]
     
     with st.sidebar:
-        st.image("https://www.svgrepo.com/show/374049/pdf.svg", width=100)
+        #st.image("https://www.svgrepo.com/show/374049/pdf.svg", width=100)
         choice = st.selectbox("選擇功能", activities)
         st.markdown("---")
         st.markdown("<p class='info-text'>版本 Ver: 1.0s 2025<br>作者：葉春華</p>", unsafe_allow_html=True)
