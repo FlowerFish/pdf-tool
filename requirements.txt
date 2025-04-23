@@ -4,3 +4,4 @@ pillow
 onnxruntime
 pdfplumber
 fitz
+frontend
