@@ -1,6 +1,5 @@
 pdfplumber
 fitz
-PIL
 tempfile
 zipfile
 base64
